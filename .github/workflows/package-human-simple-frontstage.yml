@@ -39,10 +39,16 @@ jobs:
           python .github/skill-tools/package_skill.py /tmp/human-simple-skill/human-simple-frontstage "$GITHUB_WORKSPACE/dist"
           test -f dist/skill.zip
 
-      - name: Upload skill package
+      - name: Prepare direct installable artifact
+        run: |
+          rm -rf artifact
+          mkdir -p artifact/human-simple-frontstage
+          cp -a /tmp/human-simple-skill/human-simple-frontstage/. artifact/human-simple-frontstage/
+
+      - name: Upload direct skill package
         uses: actions/upload-artifact@v4
         with:
-          name: human-simple-frontstage-skill
-          path: dist/skill.zip
+          name: human-simple-frontstage-direct
+          path: artifact/
           if-no-files-found: error
           retention-days: 30
