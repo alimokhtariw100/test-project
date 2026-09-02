@@ -23,13 +23,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate and package skill
+      - name: Validate and stage skill package
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-          import zipfile
+          import shutil
 
           skill = Path("skills/human-simple-frontstage")
           skill_md = skill / "SKILL.md"
@@ -81,24 +81,23 @@ jobs:
           if missing:
               raise SystemExit(f"Missing required references: {sorted(missing)}")
 
-          dist = Path("dist")
-          dist.mkdir(exist_ok=True)
-          output = dist / "skill.zip"
-          with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
-              for path in sorted(skill.rglob("*")):
-                  if path.is_file():
-                      zf.write(path, path.relative_to(skill.parent))
+          total_size = sum(path.stat().st_size for path in skill.rglob("*") if path.is_file())
+          if total_size > 25 * 1024 * 1024:
+              raise SystemExit("Skill package exceeds 25 MiB")
 
-          if output.stat().st_size > 25 * 1024 * 1024:
-              raise SystemExit("skill.zip exceeds 25 MiB")
+          artifact = Path("artifact")
+          if artifact.exists():
+              shutil.rmtree(artifact)
+          artifact.mkdir()
+          shutil.copytree(skill, artifact / "human-simple-frontstage")
 
-          print(f"Validated and packaged: {output} ({output.stat().st_size} bytes)")
+          print(f"Validated and staged skill package ({total_size} bytes)")
           PY
 
-      - name: Upload skill.zip
+      - name: Upload installable skill package
         uses: actions/upload-artifact@v4
         with:
-          name: human-simple-frontstage
-          path: dist/skill.zip
+          name: skill
+          path: artifact
           if-no-files-found: error
           retention-days: 30
