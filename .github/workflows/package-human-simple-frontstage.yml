@@ -1,12 +1,12 @@
 name: Package human-simple-frontstage
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
     paths:
       - "skills/human-simple-frontstage/**"
+      - ".github/skill-tools/**"
       - ".github/workflows/package-human-simple-frontstage.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,81 +23,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate and stage skill package
-        shell: bash
+      - name: Install validator dependency
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Initialize, validate, and package skill
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          import shutil
+          rm -rf /tmp/human-simple-skill
+          mkdir -p /tmp/human-simple-skill
+          python .github/skill-tools/init_skill.py human-simple-frontstage --path /tmp/human-simple-skill
+          rm -rf /tmp/human-simple-skill/human-simple-frontstage/scripts
+          rm -rf /tmp/human-simple-skill/human-simple-frontstage/references
+          rm -rf /tmp/human-simple-skill/human-simple-frontstage/assets
+          rm -rf /tmp/human-simple-skill/human-simple-frontstage/agents
+          cp -a skills/human-simple-frontstage/. /tmp/human-simple-skill/human-simple-frontstage/
+          python .github/skill-tools/package_skill.py /tmp/human-simple-skill/human-simple-frontstage "$GITHUB_WORKSPACE/dist"
+          test -f dist/skill.zip
 
-          skill = Path("skills/human-simple-frontstage")
-          skill_md = skill / "SKILL.md"
-          agent_yaml = skill / "agents/openai.yaml"
-
-          if not skill_md.is_file():
-              raise SystemExit("SKILL.md not found")
-          if not agent_yaml.is_file():
-              raise SystemExit("agents/openai.yaml not found")
-
-          content = skill_md.read_text(encoding="utf-8")
-          match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-          if not match:
-              raise SystemExit("Invalid YAML frontmatter")
-
-          frontmatter = match.group(1)
-          name_match = re.search(r"^name:\s*([^\n]+)$", frontmatter, re.MULTILINE)
-          description_match = re.search(r"^description:\s*(.+)$", frontmatter, re.MULTILINE)
-          if not name_match or not description_match:
-              raise SystemExit("Missing name or description")
-
-          name = name_match.group(1).strip()
-          description = description_match.group(1).strip()
-          if name != "human-simple-frontstage":
-              raise SystemExit(f"Unexpected skill name: {name}")
-          if not re.fullmatch(r"[a-z0-9-]+", name):
-              raise SystemExit("Skill name must be lowercase hyphen-case")
-          if len(name) > 64:
-              raise SystemExit("Skill name exceeds 64 characters")
-          if not description or len(description) > 1024:
-              raise SystemExit("Description is missing or too long")
-          if "<" in description or ">" in description:
-              raise SystemExit("Description contains angle brackets")
-
-          required_refs = {
-              "references/examples.md",
-              "references/output-formats.md",
-              "references/persian-style.md",
-              "references/project-integration.md",
-              "references/quality-gates.md",
-              "references/term-map-fa.md",
-          }
-          existing = {
-              str(path.relative_to(skill))
-              for path in skill.rglob("*")
-              if path.is_file()
-          }
-          missing = required_refs - existing
-          if missing:
-              raise SystemExit(f"Missing required references: {sorted(missing)}")
-
-          total_size = sum(path.stat().st_size for path in skill.rglob("*") if path.is_file())
-          if total_size > 25 * 1024 * 1024:
-              raise SystemExit("Skill package exceeds 25 MiB")
-
-          artifact = Path("artifact")
-          if artifact.exists():
-              shutil.rmtree(artifact)
-          artifact.mkdir()
-          shutil.copytree(skill, artifact / "human-simple-frontstage")
-
-          print(f"Validated and staged skill package ({total_size} bytes)")
-          PY
-
-      - name: Upload installable skill package
+      - name: Upload skill package
         uses: actions/upload-artifact@v4
         with:
-          name: skill
-          path: artifact
+          name: human-simple-frontstage-skill
+          path: dist/skill.zip
           if-no-files-found: error
           retention-days: 30
