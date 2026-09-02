@@ -7,14 +7,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: skill-human-simple-frontstage
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,6 +44,19 @@ jobs:
           mkdir -p dist
           python .github/skill-tools/package_skill.py /tmp/skill-build/human-simple-frontstage dist
           test -f dist/skill.zip
+          cp dist/skill.zip skill.zip
+
+      - name: Publish exact skill.zip on the branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add skill.zip
+          if git diff --cached --quiet; then
+            echo "skill.zip is already current"
+          else
+            git commit -m "build(skill): publish validated skill.zip [skip ci]"
+            git push origin HEAD:skill-human-simple-frontstage
+          fi
 
       - name: Upload packaged skill
         uses: actions/upload-artifact@v4
