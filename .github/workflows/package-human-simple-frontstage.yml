@@ -1,0 +1,51 @@
+name: Package human-simple-frontstage
+
+on:
+  push:
+    branches:
+      - skill-human-simple-frontstage
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install validator dependency
+        run: python -m pip install --quiet PyYAML
+
+      - name: Initialize clean skill template
+        run: |
+          rm -rf /tmp/skill-build
+          mkdir -p /tmp/skill-build
+          python .github/skill-tools/init_skill.py human-simple-frontstage --path /tmp/skill-build
+
+      - name: Replace template with final skill files
+        run: |
+          rm -rf /tmp/skill-build/human-simple-frontstage
+          cp -R human-simple-frontstage /tmp/skill-build/human-simple-frontstage
+
+      - name: Validate and package
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          python .github/skill-tools/package_skill.py /tmp/skill-build/human-simple-frontstage dist
+          test -f dist/skill.zip
+
+      - name: Upload packaged skill
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-simple-frontstage-skill
+          path: dist/skill.zip
+          if-no-files-found: error
+          retention-days: 7
